@@ -43,7 +43,6 @@ iptables -t raw -I PREROUTING -p tcp --tcp-flags SYN,ACK ACK -m ttl --ttl-eq {0}
     'win': '''iptables -t raw -I PREROUTING -p tcp --tcp-flags SYN,ACK SYN,ACK -m u32 --u32 "6&0xFF=0x6 && 0>>22&0x3C@12&0xFFFF={0}" -j DROP
 iptables -t raw -I PREROUTING -p tcp ---syn -m u32 --u32 "6&0xFF=0x6 && 0>>22&0x3C@12&0xFFFF={0}" -j DROP
 iptables -t raw -I PREROUTING -p tcp --tcp-flags SYN,ACK ACK -m u32 --u32 "6&0xFF=0x6 && 0>>22&0x3C@12&0xFFFF={0}" -j DROP''',
-    'https://hastebin.com/ruxacodino.py': 'echo Blin',
     'mss': '''iptables -t raw -I PREROUTING -p tcp --tcp-flags SYN,ACK SYN,ACK -m tcpmss --mss {0} -j DROP
 iptables -t raw -I PREROUTING -p tcp --tcp-flags SYN,ACK ACK -m tcpmss --mss {0} -j DROP
 iptables -t raw -I PREROUTING -p tcp --syn -m tcpmss --mss {0} -j DROP'''
