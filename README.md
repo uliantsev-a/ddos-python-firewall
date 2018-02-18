@@ -1,4 +1,4 @@
-###DDOS Python Firewall
+### DDOS Python Firewall
 
 Скрипт служит для защиты от DDOS атак следующего типа:
 - TCP-ACK Flood
