@@ -1,4 +1,6 @@
 from scapy.all import *
+import ifaddr
+
 import time, os, datetime, threading
 banned_ttl = []
 banned_mss = []
@@ -16,7 +18,7 @@ detecting = True
 attack = False
 dumping = True
 
-lim = 1600
+lim = 2600
 delay = 3
 atl = 'attacks_logs'
 ipt_flush = [
@@ -24,39 +26,47 @@ ipt_flush = [
 ]
 
 ipt_rules = [
-    'iptables -t raw -A PREROUTING -p tcp --tcp-flags SYN,ACK SYN,ACK -m state --state NEW -j DROP',
     'iptables -t raw -A PREROUTING -p tcp --syn -m state --state NEW -j DROP',
-    'iptables -t raw -A PREROUTING -p tcp --tcp-flags SYN,ACK ACK -m state --state NEW -j DROP',
-    'iptables -t raw -A PREROUTING -p tcp --tcp-flags SYN,ACK SYN,ACK -m length --length 0 -j DROP',
     'iptables -t raw -A PREROUTING -p tcp --syn -m length --length 0 -j DROP',
-    'iptables -t raw -A PREROUTING -p tcp --tcp-flags SYN,ACK ACK -m length --length 0 -j DROP',
-    'iptables -t raw -A PREROUTING -p tcp --tcp-flags SYN,ACK SYN,ACK -m u32 --u32 "6&0xFF=0x6 && 0>>22&0x3C@12&0xFFFF=0x00:0x1fff" -j DROP',
-    'iptables -t raw -A PREROUTING -p tcp --tcp-flags SYN,ACK ACK -m u32 --u32 "6&0xFF=0x6 && 0>>22&0x3C@12&0xFFFF=0x00:0x1fff" -j DROP',
-    'iptables -t raw -A PREROUTING -p tcp --syn -m u32 --u32 "6&0xFF=0x6 && 0>>22&0x3C@12&0xFFFF=0x00:0x1fff" -j DROP',
-    'iptables -t raw -A PREROUTING -p tcp -s 78.179.0.0/24 -j DROP'
+    'iptables -t raw -A PREROUTING -p tcp --syn -m u32 --u32 "6&0xFF=0x6 && 0>>22&0x3C@12&0xFFFF=0x00:0x1fff" -j DROP'
 ]
 
+
 ipt_block = {
-    'ttl': '''iptables -t raw -I PREROUTING -p tcp --tcp-flags SYN,ACK SYN,ACK -m ttl --ttl-eq {0} -j DROP
-iptables -t raw -I PREROUTING -p tcp --syn -m ttl --ttl-eq {0} -j DROP
-iptables -t raw -I PREROUTING -p tcp --tcp-flags SYN,ACK ACK -m ttl --ttl-eq {0} -j DROP''',
-    'win': '''iptables -t raw -I PREROUTING -p tcp --tcp-flags SYN,ACK SYN,ACK -m u32 --u32 "6&0xFF=0x6 && 0>>22&0x3C@12&0xFFFF={0}" -j DROP
-iptables -t raw -I PREROUTING -p tcp ---syn -m u32 --u32 "6&0xFF=0x6 && 0>>22&0x3C@12&0xFFFF={0}" -j DROP
-iptables -t raw -I PREROUTING -p tcp --tcp-flags SYN,ACK ACK -m u32 --u32 "6&0xFF=0x6 && 0>>22&0x3C@12&0xFFFF={0}" -j DROP''',
-    'mss': '''iptables -t raw -I PREROUTING -p tcp --tcp-flags SYN,ACK SYN,ACK -m tcpmss --mss {0} -j DROP
-iptables -t raw -I PREROUTING -p tcp --tcp-flags SYN,ACK ACK -m tcpmss --mss {0} -j DROP
-iptables -t raw -I PREROUTING -p tcp --syn -m tcpmss --mss {0} -j DROP'''
+    'ttl': '''iptables -t raw -I PREROUTING -p tcp --syn -m ttl --ttl-eq {0} -j DROP''',
+    'win': '''iptables -t raw -I PREROUTING -p tcp --syn -m u32 --u32 "6&0xFF=0x6 && 0>>22&0x3C@12&0xFFFF={0}" -j DROP''',
+    'mss': '''iptables -t raw -I PREROUTING -p tcp --syn -m tcpmss --mss {0} -j DROP'''
 }
 
 packets = {'wins': [], 'ttls': [], 'msss': [], 'seqs': [], 'dsts': []}
 
+
+os.system("""/sbin/sysctl -w net/netfilter/nf_conntrack_tcp_loose=0
+iptables -A INPUT -m state --state INVALID -j DROP
+/sbin/sysctl -w net/ipv4/tcp_timestamps=1
+echo 1000000 > /sys/module/nf_conntrack/parameters/hashsize
+/sbin/sysctl -w net/netfilter/nf_conntrack_max=2000000
+""")
+
+proxy_drop_rules = ["iptables -t raw -I PREROUTING -i {0} -p tcp -m tcp --syn --dport {1} -j CT --notrack",
+"iptables -A INPUT -i {0} -p tcp -m tcp --dport {1} -m state --state INVALID,UNTRACKED -j SYNPROXY --sack-perm --timestamp --wscale 7 --mss 1460"
+]
+
+def get_adap_to_ip():
+    dict_adap = {}
+    adapters = ifaddr.get_adapters()
+    for adap in adapters:
+        for ip in adap.ips:
+            dict_adap[ip.ip] = ip.nice_name.split(':')[0]
+    return dict_adap
+
+adap_dic = get_adap_to_ip()
 
 def log(m):
     m = '[' + datetime.datetime.now().strftime("%d/%m/%y#%H:%M:%S") + '] ' + m
     if 'NO ATTACK,' not in m:
         logf.write(m + '\n')
     print(m)
-
 
 def BAN(typ, c):
     if typ == 'win':
@@ -75,6 +85,14 @@ def UNBAN():
     banned_ttl, banned_win = [], []
     banned_seq, banned_mss = [], []
     log('[INFO] Standart rules loaded')
+
+def DROP_PROXY(addr):
+    adap = adap_dic.get(addr.ip)
+    if adap:
+        for cmd_proxy in proxy_drop_rules: 
+            os.system(cmd_proxy.format(adap, addr.port))
+
+    log('[INFO] DROP_PROXY {}:{}'.format(adap, addr.port))
 
 
 def BLOCKER(TTLL, WINL, SEQL, MSSL, DSTL):
@@ -240,6 +258,7 @@ while 1:
     i = 0
     i_syn = 0
     i_ack = 0
+    g_addr = None
 
     def start():
         global attack, packets, dumping
@@ -255,6 +274,8 @@ while 1:
             if attack:
                 log('[WARNING] ATTACK MITIGATED, POWERING OFF FILTERS...\n')
                 UNBAN()
+                if g_addr:
+                    DROP_PROXY(g_addr)
             packets = {'wins': [], 'ttls': [], 'msss': [], 'seqs': [], 'dsts': []}
             log('[INFO] NO ATTACK, {} all ({} SYN, {} ACK) packets per sec.'.format(i, i_syn, i_ack))
             attack = False
@@ -273,6 +294,8 @@ while 1:
         except:
             return
 
+        g_addr = {'ip': IP.dst, 'port': TCP.sport}
+        # pdb.set_trace()
         if TCP.flags & SYN:
             i_syn += 2
         elif TCP.flags & ACK:

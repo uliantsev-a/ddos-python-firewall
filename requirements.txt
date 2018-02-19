@@ -1,1 +1,3 @@
+ifaddr==0.1.4
+ipaddress==1.0.19
 scapy-python3==0.23

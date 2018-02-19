@@ -3,6 +3,8 @@
 Скрипт служит для защиты от DDOS атак следующего типа:
 - TCP-ACK Flood
 - TCP-SYN Flood
+- TCP-RST Flood
+- KIL-TCP Flood
 
 Использует:
 - scapy

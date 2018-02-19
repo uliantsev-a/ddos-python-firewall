@@ -3,6 +3,8 @@
 A script to protect against DDOS attacks of the following type:
 - TCP-ACK Flood
 - TCP-SYN Flood
+- TCP-RST Flood
+- KIL-TCP Flood
 
 Uses:
 - scapy
